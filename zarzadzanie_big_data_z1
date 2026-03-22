@@ -1,3 +1,5 @@
+#Łukasz Piechociński 193315
+
 #część1 - pozyskiwanie danych
 url = "https://restcountries.com/v3.1/all?fields=name,capital,region,subregion,population,area,currencies"
 
