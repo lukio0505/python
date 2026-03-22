@@ -1,0 +1,71 @@
+#część1 - pozyskiwanie danych
+url = "https://restcountries.com/v3.1/all?fields=name,capital,region,subregion,population,area,currencies"
+
+response = requests.get(url)
+data = response.json()
+
+def get_currency(currencies_dict):
+    if currencies_dict:
+        return list(currencies_dict.keys())[0]
+    return None
+
+df = pd.DataFrame({
+    "nazwa": [kraj.get("name", {}).get("common") for kraj in data],
+    "stolica": [(kraj.get("capital") or [None])[0] for kraj in data],
+    "region": [kraj.get("region") for kraj in data],
+    "subregion": [kraj.get("subregion") for kraj in data],
+    "populacja": [kraj.get("population") for kraj in data],
+    "powierzchnia": [kraj.get("area") for kraj in data],
+    "waluta": [get_currency(kraj.get("currencies")) for kraj in data]
+})
+
+print(df.head())
+print(df.shape)
+print(df.dtypes)
+
+#część2 - zapis do bazy SQLite
+import sqlite3
+conn = sqlite3.connect("kraje_swiata.db")
+df.to_sql("kraje", conn, if_exists="replace", index=False)
+print("Dane zostały zapisane w bazie")
+
+#część3 - analiza SQL
+#1
+pd.read_sql_query(
+    "Select sum(populacja) as łączna_populacja_świata from kraje",conn
+)
+#2
+pd.read_sql_query("""Select nazwa,populacja from kraje 
+order by populacja desc limit 10""", conn)
+#3
+pd.options.display.float_format = '{:.0f}'.format
+pd.read_sql_query("""
+select region,count(*) as liczba_krajow,avg(populacja) as srednia_opulacja from kraje group by region
+""", conn) 
+#4
+pd.read_sql_query("""
+select nazwa,powierzchnia from kraje where powierzchnia >
+(select powierzchnia from kraje where nazwa ='Poland') order by powierzchnia desc 
+""", conn)
+#5
+pd.read_sql_query("""
+select nazwa, populacja/powierzchnia as gestosc 
+from kraje order by gestosc desc limit 1
+""", conn)
+
+#Część4 - Wizualizacja
+import matplotlib.pyplot as plt
+
+df_regiony = pd.read_sql_query("""
+select region, sum(populacja) as populacja from kraje group by region
+""", conn)
+
+plt.figure(figsize=(10,6))
+plt.bar(df_regiony["region"], df_regiony["populacja"])
+
+plt.title("Populacja według regionów")
+plt.xlabel("Region")
+plt.ylabel("Populacja")
+plt.xticks(rotation=45)
+
+plt.show()
