@@ -1,2 +1,92 @@
 #Łukasz Piechociński 193315
 
+ksiazki = [
+    {"tytuł": "Wiedźmin: Ostatnie życzenie", "autor": "Andrzej Sapkowski", "liczba_sztuk": 12},
+    {"tytuł": "Rok 1984", "autor": "George Orwell", "liczba_sztuk": 5},
+    {"tytuł": "Diuna", "autor": "Frank Herbert", "liczba_sztuk": 8},
+    {"tytuł": "Hobbit", "autor": "J.R.R. Tolkien", "liczba_sztuk": 1},
+    {"tytuł": "Cyberiada", "autor": "Stanisław Lem", "liczba_sztuk": 3}
+]
+
+uzytkownicy = [
+    {"login": "u1", "hasło": "u1", "rola": "czytelnik","wypozyczone":[]},
+    {"login": "u2", "hasło": "u2", "rola": "czytelnik", "wypozyczone":[]},
+    {"login": "u3", "hasło": "u3", "rola": "czytelnik", "wypozyczone":[]}
+]
+
+def przegladanieKatalogu():
+    for i, ksiazka in enumerate(ksiazki,1):
+        print(f"{i}. Tytuł książki: {ksiazka['tytuł']}, autor: {ksiazka['autor']}, dostępne: {ksiazka['liczba_sztuk']} sztuk")
+
+def wypozyczKsiazke(lista_ksiazek, uzytkownik):
+    doWypozyczenia = input("Podaj książkę, którą chcesz wypożyczyć: ").strip()
+    czyJest = False
+    for k in lista_ksiazek:
+        if k['tytuł'].lower() == doWypozyczenia.lower():
+            czyJest = True
+            if k['liczba_sztuk'] == 0:
+                print(f"Brak dostępnych sztuk książki {k['tytuł']}")
+                break
+            else:
+                k['liczba_sztuk'] -= 1
+                uzytkownik['wypozyczone'].append(k['tytuł'])
+                print(f"Uzytkownik {uzytkownik['login']} wypożyczył książkę {k['tytuł']}")
+                break
+
+    if not czyJest:
+        print("Nie znaleziono takiej książki")
+
+def mojeWypozyczenia(uzytkownik):
+    if uzytkownik['wypozyczone']:
+        for i, tytuł in enumerate(uzytkownik['wypozyczone'],1):
+            print(f"{i}. {tytuł}")
+    else:
+        print("Nie masz wypożyczonych żadnych książek")
+
+def logowanie(lista):
+    proby = 3
+    while proby > 0:
+        print(f"Zaloguj się, pozostało prób {proby}")
+        login = input("Podaj login: ")
+        haslo = input("Podaj hasło: ")
+
+        for uzytkownik in lista:
+            if uzytkownik['login'] == login and uzytkownik['hasło'] == haslo:
+                print(f"Witaj {uzytkownik['login']}")
+                return uzytkownik
+
+        proby -= 1
+        print("Nieprawidłowy login lub hasło")
+
+    print("Przekroczony został limit prób")
+
+
+def main():
+    zalogowany = logowanie(uzytkownicy)
+
+    if zalogowany is None:
+        return
+
+    while True:
+        print("\n--- MENU GŁÓWNE ---")
+        print("1. Przeglądaj katalog")
+        print("2. Wypożycz książkę")
+        print("3. Moje wypożyczenia")
+        print("4. Wyloguj i wyjdź")
+
+        wybor = input("Podaj opcję, którą chcesz wykonać: ")
+
+        if wybor == "1":
+            przegladanieKatalogu()
+        elif wybor == "2":
+            wypozyczKsiazke(ksiazki,zalogowany)
+        elif wybor == "3":
+            mojeWypozyczenia(zalogowany)
+        elif wybor == "4":
+            print("Zaraz nastąpni wylogowanie")
+            break
+        else:
+            print("Nieprawidłowy wybór")
+
+if __name__ == "__main__":
+    main()
