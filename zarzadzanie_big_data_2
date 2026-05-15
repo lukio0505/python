@@ -1,1 +1,112 @@
+import pandas as pd
+import matplotlib.pyplot as plt
 
+
+# CZĘŚĆ 1 — EKSPLORACJA I IDENTYFIKACJA PROBLEMÓW
+df_raw = pd.read_csv("zamowienia_messy.csv")
+
+print("--- WSTĘPNA EKSPLORACJA ---")
+print(f"Shape: {df_raw.shape}")
+print("\nInfo:")
+df_raw.info()
+print("\nStatystyki opisowe (numeryczne):")
+print(df_raw.describe())
+print("\nBraki danych:")
+print(df_raw.isnull().sum())
+print("\nKategorie (wartości w kolumnie 'kategoria'):")
+print(df_raw["kategoria"].value_counts(dropna=False))
+
+"""
+Zidentyfikowane problemy:
+1. Duplikaty wierszy - zbiór ma 520 wierszy dla 500 unikalnych order_id (widać po shape i max order_id).
+2. Braki danych (NaN/Null) - występują w kolumnach: kategoria, miasto, cena_jednostkowa, data_zamowienia oraz email.
+3. Błędny typ danych i różnie napisane wartości w cenie - cena_jednostkowa jest wczytana jako tekst (object) przez spacje ("1 499.00"), przecinki zamiast kropek, waluty ("zł") i wpisy typu "abc".
+4. Niespójności w tekście (wielkość liter i spacje) - kategorie mają formaty "ELEKTRONIKA", "elektronika", "Akcesoria ", a klienci i miasta mają spacje na początku/końcu.
+5. Różne formaty dat - data_zamowienia występuje jednocześnie jako YYYY-MM-DD oraz DD.MM.YYYY.
+6. Nielogiczne wartości - kolumna 'ilosc' ma minimum -1, a zdarzają się też zera, co przy zamówieniu jest błędem.
+"""
+
+# CZĘŚĆ 2 i 3 — CZYSZCZENIE I TRANSFORMACJE
+df_clean = (
+    df_raw
+    .drop_duplicates()
+    .assign(
+        klient=lambda d: d["klient"].str.strip().str.title(),
+        produkt=lambda d: d["produkt"].str.strip().str.title(),
+        kategoria=lambda d: d["kategoria"].str.strip().str.lower().fillna("unknown"),
+        miasto=lambda d: d["miasto"].str.strip().str.title().fillna("unknown"),
+        email=lambda d: d["email"].fillna("brak_emaila"),
+
+        data_zamowienia=lambda d: pd.to_datetime(d["data_zamowienia"], format="mixed", dayfirst=True, errors="coerce"),
+
+        cena_jednostkowa=lambda d: pd.to_numeric(
+            d["cena_jednostkowa"]
+            .astype(str)
+            .str.replace(r"\s+", "", regex=True)
+            .str.replace(",", ".", regex=False)
+            .str.replace("zł", "", regex=False),
+            errors="coerce"
+        )
+    )
+    .dropna(subset=["cena_jednostkowa", "data_zamowienia"])
+
+    .query("ilosc > 0")
+
+    .assign(
+        wartosc_zamowienia=lambda d: d["ilosc"] * d["cena_jednostkowa"],
+        rok=lambda d: d["data_zamowienia"].dt.year,
+        miesiac=lambda d: d["data_zamowienia"].dt.month,
+        nazwa_dnia=lambda d: d["data_zamowienia"].dt.day_name(),
+        email_poprawny=lambda d: d["email"].str.match(r"^[\w\.-]+@[\w\.-]+\.\w+$").fillna(False)
+    )
+)
+
+# CZĘŚĆ 4 — ANALIZA SQL-STYLE
+
+print("\n--- WYNIKI ANALIZY ---")
+
+wartosc_mc = (
+    df_clean
+    .groupby("miesiac")
+    .agg(laczna_wartosc=("wartosc_zamowienia", "sum"))
+    .reset_index()
+)
+print("\n1. Łączna wartość zamówień w każdym miesiącu:")
+print(wartosc_mc)
+
+top_klienci = (
+    df_clean
+    .groupby("klient")
+    .agg(suma_zamowien=("wartosc_zamowienia", "sum"))
+    .sort_values("suma_zamowien", ascending=False)
+    .head(5)
+    .reset_index()
+)
+print("\n2. Top 5 klientów:")
+print(top_klienci)
+
+srednia_kategoria = (
+    df_clean
+    .groupby("kategoria")
+    .agg(srednia_wartosc=("wartosc_zamowienia", "mean"))
+    .reset_index()
+)
+print("\n3. Średnia wartość zamówienia wg kategorii:")
+print(srednia_kategoria.round(2))
+
+# CZĘŚĆ 5 — WIZUALIZACJA
+plt.figure(figsize=(10, 6))
+plt.bar(wartosc_mc["miesiac"], wartosc_mc["laczna_wartosc"], color="#4C72B0", edgecolor="black")
+plt.title("Łączna wartość zamówień w poszczególnych miesiącach (2025)", fontsize=14)
+plt.xlabel("Miesiąc", fontsize=12)
+plt.ylabel("Wartość zamówień [PLN]", fontsize=12)
+plt.xticks(wartosc_mc["miesiac"])
+plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+plt.savefig("wykres_zamowien.png")
+print("\nZapisano wykres do pliku 'wykres_zamowien.png'.")
+
+# CZĘŚĆ 6 — ZAPIS WYNIKÓW
+
+df_clean.to_csv("zamowienia_clean.csv", index=False)
+print("Zapisano oczyszczony zbiór danych do pliku 'zamowienia_clean.csv'.")
