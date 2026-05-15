@@ -1,1 +1,210 @@
-d
+# Łukasz Piechociński 193315
+
+class Book:
+    def __init__(self, title, author, total_copies):
+        self.title = title
+        self.author = author
+        self._total_copies = total_copies
+        self._available_copies = total_copies
+
+    @property
+    def available(self):
+        return self._available_copies > 0
+
+    @property
+    def available_copies_count(self):
+        return self._available_copies
+
+    def borrow(self):
+        if not self.available:
+            raise ValueError(f"Brak egzemplarzy: {self.title}")
+        self._available_copies -= 1
+
+    def return_copy(self):
+        self._available_copies += 1
+
+    def __str__(self):
+        return f"'{self.title}' — {self.author} (dostępne: {self._available_copies}/{self._total_copies})"
+
+
+class User:
+    def __init__(self, login, password, role):
+        self.login = login
+        self._password = password
+        self.role = role
+
+    def authenticate(self, password):
+        return self._password == password
+
+    def menu(self):
+        raise NotImplementedError("Klasy pochodne muszą zaimplementować menu()")
+
+
+class Reader(User):
+    def __init__(self, login, password):
+        super().__init__(login, password, "czytelnik")
+        self.borrowed = []
+        self.extension_requests = []
+
+    def menu(self):
+        print(f"\n--- MENU CZYTELNIKA ({self.login}) ---")
+        print("  1. Przeglądaj katalog")
+        print("  2. Wypożycz książkę")
+        print("  3. Moje wypożyczenia")
+        print("  4. Prośba o przedłużenie")
+        print("  5. Wyloguj")
+        print("  6. Wyjdź z programu")
+
+
+class Librarian(User):
+    def __init__(self, login, password):
+        super().__init__(login, password, "bibliotekarz")
+
+    def menu(self):
+        print(f"\n--- MENU BIBLIOTEKARZA ({self.login}) ---")
+        print("  1. Przeglądaj katalog")
+        print("  2. Lista wszystkich wypożyczeń")
+        print("  3. Obsługa próśb o przedłużenie")
+        print("  4. Wyloguj")
+        print("  5. Wyjdź z programu")
+
+
+class LibrarySystem:
+    def __init__(self):
+        self.books = []
+        self.users = []
+        self.extension_queue = []
+
+    def seed_data(self):
+        self.books.append(Book("Wiedźmin: Ostatnie życzenie", "Andrzej Sapkowski", 12))
+        self.books.append(Book("Rok 1984", "George Orwell", 5))
+        self.books.append(Book("Diuna", "Frank Herbert", 8))
+
+        self.users.append(Reader("u1", "u1"))
+        self.users.append(Librarian("admin", "admin"))
+
+    def login_process(self):
+        attempts = 3
+        while attempts > 0:
+            print("\n--- EKRAN LOGOWANIA ---")
+            login = input("Login (wpisz 'wyjdz' aby zamknąć): ")
+
+            if login.lower() == 'wyjdz':
+                return "wyjdz"
+
+            pwd = input("Hasło: ")
+            for u in self.users:
+                if u.login == login and u.authenticate(pwd):
+                    return u
+            attempts -= 1
+            print(f"Błędne dane. Pozostało prób: {attempts}")
+        return None
+
+    def show_catalog(self):
+        print("\n--- KATALOG ---")
+        for b in self.books:
+            print(b)
+
+    def process_borrow(self, reader):
+        title = input("Co chcesz wypożyczyć? ").strip()
+        for b in self.books:
+            if b.title.lower() == title.lower():
+                try:
+                    b.borrow()
+                    reader.borrowed.append(b)
+                    print(f"Pomyślnie wypożyczono: {b.title}")
+                except ValueError as e:
+                    print(e)
+                return
+        print("Nie znaleziono książki.")
+
+    def request_extension(self, reader):
+        if not reader.borrowed:
+            print("Nie masz co przedłużać.")
+            return
+
+        print("Twoje książki:")
+        for i, b in enumerate(reader.borrowed):
+            print(f"{i + 1}. {b.title}")
+
+        index = int(input("Wybierz numer książki do przedłużenia: ")) - 1
+        book_to_ext = reader.borrowed[index]
+
+        self.extension_queue.append((reader, book_to_ext))
+        print("Prośba zostala wysłana do bibliotekarza.")
+
+    def show_all_loans(self):
+        print("\n--- AKTUALNE WYPOŻYCZENIA ---")
+        for u in self.users:
+            if isinstance(u, Reader) and u.borrowed:
+                titles = ", ".join([b.title for b in u.borrowed])
+                print(f"Czytelnik: {u.login} | Książki: {titles}")
+
+    def handle_requests(self):
+        if not self.extension_queue:
+            print("Brak próśb.")
+            return
+
+        for req in list(self.extension_queue):
+            reader, book = req
+            print(f"Czytelnik {reader.login} chce przedłużyć '{book.title}'")
+            dec = input("Zaakceptować? (t/n): ").lower()
+            if dec == 't':
+                print("Zaakceptowano.")
+            else:
+                print("Odrzucono.")
+            self.extension_queue.remove(req)
+
+
+def main():
+    lib = LibrarySystem()
+    lib.seed_data()
+
+    while True:
+        user = lib.login_process()
+
+        if user == "wyjdz" or user is None:
+            print("Zamykanie systemu...")
+            break
+
+        while True:
+            user.menu()
+            choice = input("Wybór: ")
+
+            if isinstance(user, Reader):
+                if choice == "1":
+                    lib.show_catalog()
+                elif choice == "2":
+                    lib.process_borrow(user)
+                elif choice == "3":
+                    for b in user.borrowed: print(f"- {b.title}")
+                elif choice == "4":
+                    lib.request_extension(user)
+                elif choice == "5":
+                    print("Wylogowano pomyślnie.")
+                    break
+                elif choice == "6":
+                    print("Zamykanie programu...")
+                    return
+                else:
+                    print("Nieprawidłowy wybór.")
+
+            elif isinstance(user, Librarian):
+                if choice == "1":
+                    lib.show_catalog()
+                elif choice == "2":
+                    lib.show_all_loans()
+                elif choice == "3":
+                    lib.handle_requests()
+                elif choice == "4":
+                    print("Wylogowano pomyślnie.")
+                    break
+                elif choice == "5":
+                    print("Zamykanie programu...")
+                    return
+                else:
+                    print("Nieprawidłowy wybór.")
+
+
+if __name__ == "__main__":
+    main()
